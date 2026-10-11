@@ -1,0 +1,268 @@
+services:
+  # -------------------------------------------------------------
+  # 1. PostgreSQL Database
+  # -------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: docai-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-doctor_patient_db}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-doctor_patient_db}",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - docai-network
+
+  # -------------------------------------------------------------
+  # 2. Redis Cache & Token Store
+  # -------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: docai-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - docai-network
+
+  # -------------------------------------------------------------
+  # 3. MinIO S3-Compatible Object Storage
+  # -------------------------------------------------------------
+  minio:
+    image: quay.io/minio/minio:RELEASE.2025-07-23T15-54-02Z
+    container_name: docai-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${STORAGE_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${STORAGE_SECRET_KEY:-minioadmin}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget --quiet --spider http://localhost:9000/minio/health/live || exit 1",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - docai-network
+
+  # MinIO Bucket Auto-Provisioning Helper
+  minio-create-buckets:
+    image: quay.io/minio/mc:latest
+    container_name: docai-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      /usr/bin/mc alias set myminio http://minio:9000 ${STORAGE_ACCESS_KEY:-minioadmin} ${STORAGE_SECRET_KEY:-minioadmin};
+      /usr/bin/mc mb myminio/doctor-patient-files || true;
+      /usr/bin/mc anonymous set download myminio/doctor-patient-files;
+      exit 0;
+      "
+    networks:
+      - docai-network
+
+  # -------------------------------------------------------------
+  # 4. Qdrant Hybrid RAG Vector Database
+  # -------------------------------------------------------------
+  qdrant:
+    image: qdrant/qdrant:v1.11.0
+    container_name: docai-qdrant
+    restart: unless-stopped
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget --quiet --spider http://localhost:6333/healthz || exit 1",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - docai-network
+
+  # -------------------------------------------------------------
+  # 5. Python Microservice (OCR, Sentence Transformers, Summarizer)
+  # -------------------------------------------------------------
+  python-service:
+    build:
+      context: ./python-service
+      dockerfile: Dockerfile
+    container_name: docai-python-service
+    restart: unless-stopped
+    environment:
+      SERVICE_NAME: ${PYTHON_SERVICE_NAME:-ai-doctor-ml-service}
+      HOST: 0.0.0.0
+      PORT: 8000
+      INTERNAL_TOKEN: ${PYTHON_SERVICE_TOKEN:-supersecretinternaltoken123}
+      STORAGE_ENDPOINT: http://minio:9000
+      STORAGE_ACCESS_KEY: ${STORAGE_ACCESS_KEY:-minioadmin}
+      STORAGE_SECRET_KEY: ${STORAGE_SECRET_KEY:-minioadmin}
+      STORAGE_BUCKET: ${STORAGE_BUCKET:-doctor-patient-files}
+      QDRANT_URL: http://qdrant:6333
+      QDRANT_COLLECTION: ${QDRANT_COLLECTION_NAME:-medical_documents}
+      GROQ_API_KEY: ${GROQ_API_KEY}
+    ports:
+      - "8000:8000"
+    depends_on:
+      minio:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget --quiet --spider http://localhost:8000/health || exit 1",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    networks:
+      - docai-network
+
+  # -------------------------------------------------------------
+  # 6. Backend API (Node.js, Express, LangGraph, Prisma)
+  # -------------------------------------------------------------
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: docai-backend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 5000
+      API_VERSION: v1
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-doctor_patient_db}?schema=public
+      REDIS_URL: redis://redis:6379
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-very_long_jwt_access_secret_key_at_least_32_characters}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-very_long_jwt_refresh_secret_key_at_least_32_characters}
+      STORAGE_ENDPOINT: http://minio:9000
+      STORAGE_ACCESS_KEY: ${STORAGE_ACCESS_KEY:-minioadmin}
+      STORAGE_SECRET_KEY: ${STORAGE_SECRET_KEY:-minioadmin}
+      STORAGE_BUCKET: ${STORAGE_BUCKET:-doctor-patient-files}
+      MISTRAL_API_KEY: ${MISTRAL_API_KEY}
+      TAVILY_API_KEY: ${TAVILY_API_KEY}
+      QDRANT_URL: http://qdrant:6333
+      PYTHON_SERVICE_URL: http://python-service:8000
+      PYTHON_SERVICE_TOKEN: ${PYTHON_SERVICE_TOKEN:-supersecretinternaltoken123}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost}
+      SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-demo@gmail.com}
+      SMTP_PASS: ${SMTP_PASS:-demopassword}
+      EMAIL_FROM: ${EMAIL_FROM:-noreply@docai.com}
+    ports:
+      - "5000:5000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      python-service:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget --quiet --spider http://localhost:5000/health || exit 1",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    networks:
+      - docai-network
+
+  # -------------------------------------------------------------
+  # 7. Frontend SPA (React 19, Nginx)
+  # -------------------------------------------------------------
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: /api/v1
+        VITE_SOCKET_URL: /
+    container_name: docai-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - docai-network
+
+  # -------------------------------------------------------------
+  # 8. Unified Nginx Reverse Proxy
+  # -------------------------------------------------------------
+  nginx:
+    image: nginx:alpine
+    container_name: docai-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+    depends_on:
+      - frontend
+      - backend
+      - minio
+      - python-service
+    networks:
+      - docai-network
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  minio_data:
+    driver: local
+  qdrant_data:
+    driver: local
+
+networks:
+  docai-network:
+    driver: bridge
