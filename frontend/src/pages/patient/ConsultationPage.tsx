@@ -33,6 +33,7 @@ import {
   HeartPulse,
   RefreshCw,
   Pill,
+  Leaf,
   Globe,
 } from "lucide-react";
 import { formatDateTime } from "@/lib/utils";
@@ -493,7 +494,7 @@ export default function ConsultationPage() {
                           </span>
                         </div>
                         <p className="text-xs text-emerald-800">
-                          Your clinical assessment, risk tier, and evidence-based medication suggestions are ready.
+                          Your clinical assessment, risk tier, and evidence-based home remedies (gharelu nuskhe) are ready.
                         </p>
                       </div>
                     </div>
@@ -503,8 +504,8 @@ export default function ConsultationPage() {
                         onClick={() => navigate(`/patient/reports/${reportId}`)}
                         className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-sm gap-1.5"
                       >
-                        <Pill className="h-3.5 w-3.5" />
-                        View Report & Medications{" "}
+                        <Leaf className="h-3.5 w-3.5" />
+                        View Report & Home Remedies{" "}
                         <ArrowRight className="h-3.5 w-3.5" />
                       </Button>
                       <Button

@@ -336,9 +336,9 @@ export class AiService {
       // PDF generation error should not prevent saving report record
     }
 
-    const medicationData = (reportData.medicationSuggestions && reportData.medicationSuggestions.length > 0)
-      ? reportData.medicationSuggestions
-      : reportData.otcSuggestions;
+    const remedyData = (reportData.homeRemedies && reportData.homeRemedies.length > 0)
+      ? reportData.homeRemedies
+      : (reportData.otcSuggestions || []);
 
     const isTavilyUsed = Boolean(reportData.tavilyUsed || (reportData.tavilySearchResults && reportData.tavilySearchResults.length > 0));
 
@@ -351,7 +351,7 @@ export class AiService {
         recommendedTests: reportData.recommendedTests,
         precautions: reportData.precautions,
         lifestyleAdvice: reportData.lifestyleAdvice,
-        otcSuggestions: medicationData,
+        otcSuggestions: remedyData,
         emergencySigns: reportData.emergencySigns,
         referralNotes: reportData.referralNotes,
         confidenceScore: reportData.confidenceScore,
@@ -371,7 +371,7 @@ export class AiService {
         recommendedTests: reportData.recommendedTests,
         precautions: reportData.precautions,
         lifestyleAdvice: reportData.lifestyleAdvice,
-        otcSuggestions: medicationData,
+        otcSuggestions: remedyData,
         emergencySigns: reportData.emergencySigns,
         referralNotes: reportData.referralNotes,
         confidenceScore: reportData.confidenceScore,
@@ -413,6 +413,15 @@ export class AiService {
     });
     if (!report) throw new AppError('Report not found', 404, 'NOT_FOUND');
 
+    const rawRemedies = Array.isArray(report.otcSuggestions) ? (report.otcSuggestions as any[]) : [];
+    const homeRemedies = rawRemedies.map((r: any) => ({
+      remedy: typeof r === 'object' && r ? r.remedy || r.name || 'Supportive Care' : String(r).split(':')[0] || 'Supportive Care',
+      preparation: typeof r === 'object' && r ? r.preparation || r.dosageGuide || 'Traditional supportive preparation' : String(r),
+      frequency: typeof r === 'object' && r ? r.frequency || 'Twice daily after meals' : 'Daily as needed',
+      benefit: typeof r === 'object' && r ? r.benefit || r.purpose || 'Soothing symptom relief' : 'Supportive care',
+      precautions: typeof r === 'object' && r ? r.precautions : undefined,
+    }));
+
     const reportData: GeneratedReportData = {
       patientSummary: (report.patientSummary as any) || {},
       symptoms: (report.symptoms as any) || [],
@@ -421,6 +430,7 @@ export class AiService {
       recommendedTests: (report.recommendedTests as any) || [],
       precautions: (report.precautions as any) || [],
       lifestyleAdvice: (report.lifestyleAdvice as any) || [],
+      homeRemedies,
       otcSuggestions: (report.otcSuggestions as any) || [],
       emergencySigns: (report.emergencySigns as any) || [],
       referralNotes: report.referralNotes || '',

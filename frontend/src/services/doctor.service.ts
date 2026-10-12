@@ -14,6 +14,9 @@ export const doctorService = {
   addNote: (patientId: string, data: { appointmentId?: string; noteType: string; content: string; diagnosis?: string; icdCodes?: string[]; followUpDate?: string }) =>
     api.post(`/doctor/patients/${patientId}/notes`, data),
 
+  addDoctorNote: (patientId: string, data: { appointmentId?: string; noteType: string; content: string; diagnosis?: string; icdCodes?: string[]; followUpDate?: string }) =>
+    api.post(`/doctor/patients/${patientId}/notes`, data),
+
   addPrescription: (patientId: string, data: { appointmentId?: string; medications: any[]; instructions?: string; validUntil?: string }) =>
     api.post(`/doctor/patients/${patientId}/prescription`, data),
 

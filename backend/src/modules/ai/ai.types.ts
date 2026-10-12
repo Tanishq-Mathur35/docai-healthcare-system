@@ -13,6 +13,14 @@ export interface PossibleCondition {
   explanation: string;
 }
 
+export interface HomeRemedy {
+  remedy: string; // Traditional / natural remedy name (e.g. "Warm Turmeric Milk", "Ginger Honey Tea")
+  preparation: string; // How to prepare or take the remedy
+  frequency: string; // Recommended frequency (e.g. "Twice daily after meals")
+  benefit: string; // Physiological / soothing benefit
+  precautions?: string; // Any contraindications or dietary notes
+}
+
 export interface MedicationSuggestion {
   name: string;
   type: string; // 'OTC' | 'Prescription Required' | 'Supportive Care'
@@ -36,8 +44,7 @@ export interface GeneratedReportData {
   recommendedTests: string[];
   precautions: string[];
   lifestyleAdvice: string[];
-  otcSuggestions: string[];
-  medicationSuggestions?: MedicationSuggestion[];
+  homeRemedies: HomeRemedy[];
   emergencySigns: string[];
   referralNotes: string;
   confidenceScore: number; // 0.0 to 1.0
@@ -45,6 +52,9 @@ export interface GeneratedReportData {
   tavilyUsed?: boolean;
   tavilySearchResults?: TavilySearchResult[];
   disclaimer: string;
+  // Legacy / optional backward compatibility fields
+  otcSuggestions?: string[];
+  medicationSuggestions?: MedicationSuggestion[];
 }
 
 export interface LangGraphConsultationState {

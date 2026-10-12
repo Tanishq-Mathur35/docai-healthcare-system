@@ -11,7 +11,7 @@ import { DisclaimerBanner } from '@/components/shared/DisclaimerBanner';
 import {
   Download, Calendar, AlertOctagon, CheckCircle2,
   Stethoscope, Activity, HeartPulse, FileText, ArrowLeft,
-  Pill, Globe, ExternalLink, ShieldCheck, AlertCircle,
+  Pill, Globe, ExternalLink, ShieldCheck, AlertCircle, Leaf, Sparkles,
 } from 'lucide-react';
 import { formatDateTime } from '@/lib/utils';
 
@@ -153,11 +153,11 @@ export default function ReportPage() {
             </ul>
           </div>
 
-          {/* Evidence-Based Medication & Relief Guidance (Tavily Verified) */}
+          {/* Evidence-Based Home Remedies (Gharelu Nuskhe) & Supportive Care */}
           <div className="space-y-3">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-1 border-b">
               <h3 className="font-bold text-sm flex items-center gap-2 text-foreground">
-                <Pill className="h-4 w-4 text-emerald-600" /> Evidence-Based Medication & Relief Guidance
+                <Leaf className="h-4 w-4 text-emerald-600" /> Evidence-Based Home Remedies (घरेलू नुस्खे) & Supportive Care
               </h3>
               {(report.tavilyUsed || (report.tavilySearchResults && (report.tavilySearchResults as any[]).length > 0)) && (
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-teal-50 text-teal-700 border border-teal-200">
@@ -167,84 +167,74 @@ export default function ReportPage() {
             </div>
 
             {/* Advisory box */}
-            <div className="p-3 bg-amber-50/70 border border-amber-200/80 rounded-xl text-xs text-amber-800 flex items-start gap-2.5">
-              <AlertCircle className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
+            <div className="p-3.5 bg-emerald-50/70 border border-emerald-200/80 rounded-xl text-xs text-emerald-900 flex items-start gap-2.5">
+              <ShieldCheck className="h-4 w-4 text-emerald-600 flex-shrink-0 mt-0.5" />
               <div>
-                <span className="font-semibold">Safety Notice:</span> Over-the-counter suggestions are for informational supportive care and must not replace professional prescription or physician diagnosis. Consult a licensed pharmacist or doctor if taking other medications or experiencing worsening symptoms.
+                <span className="font-bold">Medical Safety Protocol:</span> As per standard clinical protocols, this AI assistant does <span className="font-semibold underline">not</span> prescribe pharmaceutical medicines or drugs. Prescriptions must be issued exclusively by a licensed human physician. Below are safe, evidence-supported natural home remedies (घरेलू नुस्खे) and supportive self-care to alleviate symptoms comfortably.
               </div>
             </div>
 
-            {/* Medication cards */}
+            {/* Home Remedy cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-              {(report.otcSuggestions as any[]) && (report.otcSuggestions as any[]).length > 0 ? (
-                (report.otcSuggestions as any[]).map((med: any, idx: number) => {
-                  const isObject = typeof med === 'object' && med !== null;
-                  const name = isObject ? med.name : String(med).split(':')[0];
-                  const details = isObject ? med : null;
-
-                  return (
-                    <div
-                      key={idx}
-                      className="p-4 rounded-xl border border-slate-200/90 bg-gradient-to-br from-white to-slate-50/50 shadow-xs hover:border-emerald-300 transition-all space-y-2.5"
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex items-center gap-2">
-                          <div className="h-8 w-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-100 flex-shrink-0">
-                            <Pill className="h-4 w-4" />
-                          </div>
-                          <div>
-                            <h4 className="font-bold text-sm text-slate-900">{name}</h4>
-                            {details?.type && (
-                              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full inline-block mt-0.5 ${
-                                details.type.toLowerCase().includes('prescription')
-                                  ? 'bg-amber-100 text-amber-800'
-                                  : details.type.toLowerCase().includes('supportive')
-                                  ? 'bg-sky-100 text-sky-800'
-                                  : 'bg-emerald-100 text-emerald-800'
-                              }`}>
-                                {details.type}
-                              </span>
-                            )}
-                          </div>
+              {((report.homeRemedies as any[]) && (report.homeRemedies as any[]).length > 0) ? (
+                (report.homeRemedies as any[]).map((rem: any, idx: number) => (
+                  <div
+                    key={idx}
+                    className="p-4 rounded-xl border border-emerald-100 bg-gradient-to-br from-white to-emerald-50/30 shadow-xs hover:border-emerald-300 transition-all space-y-2.5"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2.5">
+                        <div className="h-8 w-8 rounded-lg bg-emerald-100/70 text-emerald-700 flex items-center justify-center border border-emerald-200 flex-shrink-0">
+                          <Leaf className="h-4 w-4" />
+                        </div>
+                        <div>
+                          <h4 className="font-bold text-sm text-slate-900">{rem.remedy}</h4>
+                          {rem.frequency && (
+                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 inline-block mt-0.5">
+                              {rem.frequency}
+                            </span>
+                          )}
                         </div>
                       </div>
+                    </div>
 
-                      {details ? (
-                        <div className="space-y-2 text-xs">
-                          {details.purpose && (
-                            <div>
-                              <span className="font-semibold text-slate-700">Indication / Purpose: </span>
-                              <span className="text-slate-600">{details.purpose}</span>
-                            </div>
-                          )}
-                          {details.dosageGuide && (
-                            <div className="p-2 bg-emerald-50/40 rounded-lg border border-emerald-100/60">
-                              <span className="font-semibold text-emerald-900">Dosage Guidance: </span>
-                              <span className="text-emerald-800">{details.dosageGuide}</span>
-                            </div>
-                          )}
-                          {details.precautions && (
-                            <div className="p-2 bg-slate-100/70 rounded-lg text-slate-600">
-                              <span className="font-semibold text-slate-700">Precautions: </span>
-                              <span>{details.precautions}</span>
-                            </div>
-                          )}
-                          {details.evidenceSource && (
-                            <div className="text-[11px] text-slate-400 flex items-center gap-1 pt-1 border-t border-slate-100">
-                              <ShieldCheck className="h-3 w-3 text-teal-600" />
-                              <span>Evidence: {details.evidenceSource}</span>
-                            </div>
-                          )}
+                    <div className="space-y-2 text-xs">
+                      {rem.benefit && (
+                        <div>
+                          <span className="font-semibold text-slate-700">Soothing Benefit: </span>
+                          <span className="text-slate-600">{rem.benefit}</span>
                         </div>
-                      ) : (
-                        <p className="text-xs text-slate-600 leading-relaxed">{String(med)}</p>
+                      )}
+                      {rem.preparation && (
+                        <div className="p-2.5 bg-emerald-50/60 rounded-lg border border-emerald-100/70">
+                          <span className="font-semibold text-emerald-950">Preparation Method: </span>
+                          <span className="text-emerald-900 leading-relaxed">{rem.preparation}</span>
+                        </div>
+                      )}
+                      {rem.precautions && (
+                        <div className="p-2 bg-amber-50/70 rounded-lg border border-amber-200/60 text-amber-900">
+                          <span className="font-semibold">Safety Note: </span>
+                          <span>{rem.precautions}</span>
+                        </div>
                       )}
                     </div>
-                  );
-                })
+                  </div>
+                ))
+              ) : ((report.otcSuggestions as any[]) && (report.otcSuggestions as any[]).length > 0) ? (
+                (report.otcSuggestions as any[]).map((med: any, idx: number) => (
+                  <div
+                    key={idx}
+                    className="p-4 rounded-xl border border-slate-200 bg-white space-y-2 text-xs"
+                  >
+                    <div className="font-bold text-slate-800 flex items-center gap-2">
+                      <Leaf className="h-3.5 w-3.5 text-emerald-600" /> Supportive Care Measure #{idx + 1}
+                    </div>
+                    <p className="text-slate-600">{typeof med === 'object' ? med.name || JSON.stringify(med) : String(med)}</p>
+                  </div>
+                ))
               ) : (
                 <div className="p-4 border rounded-xl text-xs text-slate-500 italic md:col-span-2">
-                  No specific over-the-counter medications suggested. Focus on hydration and clinical evaluation.
+                  No specific home remedies required. Ensure adequate hydration, warm fluids, and consult your doctor for a formal physical examination.
                 </div>
               )}
             </div>

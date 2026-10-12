@@ -1,5 +1,5 @@
 import PDFDocument from 'pdfkit';
-import { GeneratedReportData, MedicationSuggestion } from '../ai.types';
+import { GeneratedReportData, HomeRemedy } from '../ai.types';
 
 export async function generateReportPDF(
   report: GeneratedReportData,
@@ -145,48 +145,40 @@ export async function generateReportPDF(
 
     doc.moveDown(0.8);
 
-    // ── EVIDENCE-BASED SUGGESTED MEDICATIONS (TAVILY VERIFIED) ──
-    const meds = report.medicationSuggestions || [];
-    const otc = report.otcSuggestions || [];
-
-    if (meds.length > 0 || otc.length > 0) {
+    // ── EVIDENCE-BASED HOME REMEDIES (GHARELU NUSKHE) & SUPPORTIVE CARE ──
+    const remedies = report.homeRemedies || [];
+    if (remedies.length > 0) {
       doc
         .fillColor('#047857')
         .fontSize(11)
         .font('Helvetica-Bold')
-        .text('EVIDENCE-BASED MEDICATION & RELIEF SUGGESTIONS (VERIFIED VIA TAVILY SEARCH)');
+        .text('HOME REMEDIES (GHARELU NUSKHE) & SUPPORTIVE CARE (NO MEDICATIONS)');
 
-      if (meds.length > 0) {
-        meds.forEach((m: MedicationSuggestion) => {
+      remedies.forEach((r: HomeRemedy) => {
+        doc
+          .fillColor('#0f172a')
+          .fontSize(9)
+          .font('Helvetica-Bold')
+          .text(`🌿 ${r.remedy}`, { continued: true })
+          .font('Helvetica')
+          .fillColor('#047857')
+          .text(` [${r.frequency}]`);
+
+        doc
+          .fillColor('#334155')
+          .fontSize(8.5)
+          .font('Helvetica')
+          .text(`   Preparation: ${r.preparation}`)
+          .text(`   Benefit: ${r.benefit}`);
+
+        if (r.precautions) {
           doc
-            .fillColor('#0f172a')
-            .fontSize(9)
-            .font('Helvetica-Bold')
-            .text(`💊 ${m.name} [${m.type}]`, { continued: true })
-            .font('Helvetica')
-            .fillColor('#047857')
-            .text(` — ${m.purpose}`);
-
-          doc
-            .fillColor('#334155')
-            .fontSize(8.5)
-            .font('Helvetica')
-            .text(`   Dosage: ${m.dosageGuide} | Precautions: ${m.precautions}`);
-
-          if (m.evidenceSource) {
-            doc
-              .fillColor('#64748b')
-              .fontSize(7.5)
-              .text(`   Reference: ${m.evidenceSource}`);
-          }
-          doc.moveDown(0.3);
-        });
-      } else {
-        otc.forEach((s: any) => {
-          const text = typeof s === 'string' ? s : `${s.name || 'Medicine'}: ${s.dosageGuide || ''} ${s.purpose || ''}`;
-          doc.fillColor('#334155').fontSize(9).font('Helvetica').text(`💊 ${text}`);
-        });
-      }
+            .fillColor('#b45309')
+            .fontSize(8)
+            .text(`   Precautions: ${r.precautions}`);
+        }
+        doc.moveDown(0.3);
+      });
       doc.moveDown(0.8);
     }
 

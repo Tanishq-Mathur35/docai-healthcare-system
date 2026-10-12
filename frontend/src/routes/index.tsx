@@ -85,10 +85,6 @@ export default function AppRoutes() {
             <Route path="patients" element={<DoctorPatientsPage />} />
             <Route path="patients/:id" element={<DoctorPatientDetailPage />} />
             <Route path="appointments" element={<DoctorAppointmentsPage />} />
-            <Route path="two-minute-doctor" element={<TwoMinuteDoctorPage />} />
-            <Route path="report-decoded" element={<ReportDecodedPage />} />
-            <Route path="going-home-right" element={<GoingHomeRightPage />} />
-            <Route path="bol-ke-batao" element={<BolKeBataoPage />} />
             <Route path="chat" element={<ChatPage />} />
           </Route>
         </Route>
