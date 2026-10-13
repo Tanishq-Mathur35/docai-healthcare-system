@@ -116,6 +116,49 @@ export function setupSocketIO(httpServer: HttpServer): Server {
       }
     });
 
+    // WebRTC Emergency Live Video Call Signaling
+    socket.on('webrtc_join_room', (data: { roomId: string }) => {
+      if (!data?.roomId) return;
+      socket.join(`video:${data.roomId}`);
+      logger.info(`📹 User ${user.id} (${user.firstName}) joined video room video:${data.roomId}`);
+      socket.to(`video:${data.roomId}`).emit('webrtc_peer_joined', {
+        userId: user.id,
+        name: `${user.firstName} ${user.lastName}`,
+        role: user.role,
+      });
+    });
+
+    socket.on('webrtc_offer', (data: { roomId: string; offer: any }) => {
+      if (!data?.roomId) return;
+      socket.to(`video:${data.roomId}`).emit('webrtc_offer', {
+        offer: data.offer,
+        fromUserId: user.id,
+        fromName: `${user.firstName} ${user.lastName}`,
+      });
+    });
+
+    socket.on('webrtc_answer', (data: { roomId: string; answer: any }) => {
+      if (!data?.roomId) return;
+      socket.to(`video:${data.roomId}`).emit('webrtc_answer', {
+        answer: data.answer,
+        fromUserId: user.id,
+      });
+    });
+
+    socket.on('webrtc_ice_candidate', (data: { roomId: string; candidate: any }) => {
+      if (!data?.roomId) return;
+      socket.to(`video:${data.roomId}`).emit('webrtc_ice_candidate', {
+        candidate: data.candidate,
+        fromUserId: user.id,
+      });
+    });
+
+    socket.on('webrtc_leave_room', (data: { roomId: string }) => {
+      if (!data?.roomId) return;
+      socket.leave(`video:${data.roomId}`);
+      socket.to(`video:${data.roomId}`).emit('webrtc_peer_left', { userId: user.id });
+    });
+
     socket.on('disconnect', () => {
       logger.info(`🔌 Socket disconnected: ${user.id}`);
     });

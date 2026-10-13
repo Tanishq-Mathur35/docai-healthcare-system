@@ -18,6 +18,7 @@ import doctorRoutes from './modules/doctor/doctor.routes';
 import adminRoutes from './modules/admin/admin.routes';
 import chatRoutes from './modules/chat/chat.routes';
 import clinicalToolsRoutes from './modules/clinical-tools/clinicalTools.routes';
+import emergencyRoutes from './modules/emergency/emergency.routes';
 
 const app = express();
 
@@ -62,6 +63,7 @@ app.use(`${API_PREFIX}/doctor`, doctorRoutes);
 app.use(`${API_PREFIX}/admin`, adminRoutes);
 app.use(`${API_PREFIX}/chat`, chatRoutes);
 app.use(`${API_PREFIX}/tools`, clinicalToolsRoutes);
+app.use(`${API_PREFIX}/emergency`, emergencyRoutes);
 
 // 404
 app.use((_req, res) => {

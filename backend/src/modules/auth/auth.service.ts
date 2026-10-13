@@ -1,14 +1,71 @@
 import { prisma } from '../../config/database';
-import { RefreshTokenStore } from '../../config/redis';
+import { RefreshTokenStore, redis } from '../../config/redis';
 import { hashPassword, comparePassword } from '../../utils/crypto';
 import { signAccessToken, signRefreshToken, verifyRefreshToken, hashToken, generateSecureToken } from '../../utils/jwt';
-import { sendVerificationEmail, sendPasswordResetEmail } from '../../utils/email';
+import { sendVerificationEmail, sendPasswordResetEmail, sendLoginOtpEmail } from '../../utils/email';
 import { AppError } from '../../middleware/errorHandler';
 import { createAuditLog } from '../../middleware/auditLogger';
 import { Role } from '@prisma/client';
-import { RegisterDto, LoginDto, ForgotPasswordDto, ResetPasswordDto } from './auth.schema';
+import { RegisterDto, LoginDto, ForgotPasswordDto, ResetPasswordDto, VerifyOtpDto, ResendOtpDto } from './auth.schema';
 import { env } from '../../config/env';
 import { Request } from 'express';
+import crypto from 'crypto';
+
+interface OtpRecord {
+  userId: string;
+  email: string;
+  otp: string;
+  expiresAt: number;
+  attempts: number;
+  maxAttempts: number;
+  resendAvailableAt: number;
+}
+
+const OTP_EXPIRY_SECONDS = 300; // 5 minutes
+const MAX_OTP_ATTEMPTS = 5;
+const RESEND_COOLDOWN_SECONDS = 30;
+
+// In-memory store with Redis mirror for 100% reliability
+const memoryOtpStore = new Map<string, OtpRecord>();
+
+async function saveOtpRecord(email: string, record: OtpRecord): Promise<void> {
+  const normalized = email.toLowerCase().trim();
+  memoryOtpStore.set(normalized, record);
+  try {
+    await redis.set(`otp:2fa:${normalized}`, JSON.stringify(record), { ex: OTP_EXPIRY_SECONDS });
+  } catch {
+    // Fallback to in-memory store if Redis is unreachable
+  }
+}
+
+async function getOtpRecord(email: string): Promise<OtpRecord | null> {
+  const normalized = email.toLowerCase().trim();
+  const mem = memoryOtpStore.get(normalized);
+  if (mem) return mem;
+  try {
+    const raw = await redis.get(`otp:2fa:${normalized}`);
+    if (!raw) return null;
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : (raw as OtpRecord);
+    memoryOtpStore.set(normalized, parsed);
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+async function deleteOtpRecord(email: string): Promise<void> {
+  const normalized = email.toLowerCase().trim();
+  memoryOtpStore.delete(normalized);
+  try {
+    await redis.del(`otp:2fa:${normalized}`);
+  } catch {
+    // Ignore
+  }
+}
+
+function generateSixDigitOtp(): string {
+  return crypto.randomInt(100000, 999999).toString();
+}
 
 export class AuthService {
   async register(dto: RegisterDto, req: Request) {
@@ -87,6 +144,70 @@ export class AuthService {
     const isValid = await comparePassword(dto.password, user.passwordHash);
     if (!isValid) throw new AppError('Invalid email or password', 401, 'INVALID_CREDENTIALS');
 
+    // Generate 6-digit Email OTP for 2FA (both Doctors & Patients)
+    const otp = generateSixDigitOtp();
+    const now = Date.now();
+    const otpRecord: OtpRecord = {
+      userId: user.id,
+      email: user.email,
+      otp,
+      expiresAt: now + OTP_EXPIRY_SECONDS * 1000,
+      attempts: 0,
+      maxAttempts: MAX_OTP_ATTEMPTS,
+      resendAvailableAt: now + RESEND_COOLDOWN_SECONDS * 1000,
+    };
+
+    await saveOtpRecord(user.email, otpRecord);
+    await sendLoginOtpEmail(user.email, user.firstName, otp);
+
+    return {
+      requiresOtp: true,
+      email: user.email,
+      role: user.role,
+      firstName: user.firstName,
+      expiresInSeconds: OTP_EXPIRY_SECONDS,
+      resendCooldownSeconds: RESEND_COOLDOWN_SECONDS,
+      maxAttempts: MAX_OTP_ATTEMPTS,
+      // Provide OTP in development mode so local testing works even without live SMTP
+      devOtpHint: env.NODE_ENV !== 'production' ? otp : undefined,
+    };
+  }
+
+  async verifyOtp(dto: VerifyOtpDto, req: Request) {
+    const record = await getOtpRecord(dto.email);
+    if (!record) {
+      throw new AppError('No active OTP found or code has expired. Please request a new OTP.', 400, 'OTP_NOT_FOUND');
+    }
+
+    if (Date.now() > record.expiresAt) {
+      await deleteOtpRecord(dto.email);
+      throw new AppError('Your OTP code has expired (valid for 5 minutes). Please click Resend OTP.', 400, 'OTP_EXPIRED');
+    }
+
+    if (record.attempts >= record.maxAttempts) {
+      await deleteOtpRecord(dto.email);
+      throw new AppError('Maximum verification attempts (5) exceeded. Please sign in or resend a new OTP.', 429, 'OTP_MAX_ATTEMPTS');
+    }
+
+    if (record.otp !== dto.otp.trim()) {
+      record.attempts += 1;
+      const remaining = Math.max(0, record.maxAttempts - record.attempts);
+      if (remaining === 0) {
+        await deleteOtpRecord(dto.email);
+        throw new AppError('Maximum verification attempts (5) reached. Your OTP has been invalidated. Please request a new OTP.', 429, 'OTP_MAX_ATTEMPTS');
+      }
+      await saveOtpRecord(dto.email, record);
+      throw new AppError(`Invalid OTP code. ${remaining} attempt${remaining === 1 ? '' : 's'} remaining.`, 401, 'INVALID_OTP');
+    }
+
+    // Valid OTP — clear OTP record and issue tokens
+    await deleteOtpRecord(dto.email);
+
+    const user = await prisma.user.findUnique({ where: { id: record.userId } });
+    if (!user || !user.isActive) {
+      throw new AppError('Account not found or inactive', 401, 'UNAUTHORIZED');
+    }
+
     const accessToken = signAccessToken({
       id: user.id,
       email: user.email,
@@ -97,8 +218,12 @@ export class AuthService {
     const refreshToken = signRefreshToken({ id: user.id });
     const tokenHash = hashToken(refreshToken);
 
-    // Store hashed refresh token in Redis (7 days)
-    await RefreshTokenStore.set(user.id, tokenHash, 7 * 24 * 60 * 60);
+    try {
+      await RefreshTokenStore.set(user.id, tokenHash, 7 * 24 * 60 * 60);
+    } catch {
+      // Non-fatal if Redis is offline
+    }
+
     await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
     await createAuditLog({ userId: user.id, action: 'USER_LOGIN', entity: 'User', entityId: user.id, req });
 
@@ -113,6 +238,43 @@ export class AuthService {
         lastName: user.lastName,
         avatarUrl: user.avatarUrl,
       },
+    };
+  }
+
+  async resendOtp(dto: ResendOtpDto) {
+    const user = await prisma.user.findUnique({ where: { email: dto.email } });
+    if (!user || !user.isActive) {
+      throw new AppError('User account not found', 404, 'USER_NOT_FOUND');
+    }
+
+    const existing = await getOtpRecord(dto.email);
+    const now = Date.now();
+    if (existing && now < existing.resendAvailableAt) {
+      const waitSec = Math.ceil((existing.resendAvailableAt - now) / 1000);
+      throw new AppError(`Please wait ${waitSec} seconds before requesting another OTP.`, 429, 'OTP_COOLDOWN');
+    }
+
+    const otp = generateSixDigitOtp();
+    const otpRecord: OtpRecord = {
+      userId: user.id,
+      email: user.email,
+      otp,
+      expiresAt: now + OTP_EXPIRY_SECONDS * 1000,
+      attempts: 0,
+      maxAttempts: MAX_OTP_ATTEMPTS,
+      resendAvailableAt: now + RESEND_COOLDOWN_SECONDS * 1000,
+    };
+
+    await saveOtpRecord(user.email, otpRecord);
+    await sendLoginOtpEmail(user.email, user.firstName, otp);
+
+    return {
+      message: 'A new 6-digit OTP has been sent to your email.',
+      email: user.email,
+      expiresInSeconds: OTP_EXPIRY_SECONDS,
+      resendCooldownSeconds: RESEND_COOLDOWN_SECONDS,
+      maxAttempts: MAX_OTP_ATTEMPTS,
+      devOtpHint: env.NODE_ENV !== 'production' ? otp : undefined,
     };
   }
 

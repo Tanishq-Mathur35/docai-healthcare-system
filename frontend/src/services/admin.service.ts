@@ -4,6 +4,9 @@ export const adminService = {
   getUsers: (params?: { role?: string; search?: string; isActive?: string; page?: number; limit?: number }) =>
     api.get('/admin/users', { params }),
 
+  getUserProfile: (userId: string) =>
+    api.get(`/admin/users/${userId}`),
+
   toggleUserStatus: (userId: string, isActive: boolean) =>
     api.patch(`/admin/users/${userId}/status`, { isActive }),
 

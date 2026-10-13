@@ -14,10 +14,14 @@ export interface RegisterPayload {
 }
 
 export interface LoginPayload { email: string; password: string; }
+export interface VerifyOtpPayload { email: string; otp: string; }
+export interface ResendOtpPayload { email: string; }
 
 export const authService = {
   register: (data: RegisterPayload) => api.post('/auth/register', data),
   login: (data: LoginPayload) => api.post('/auth/login', data),
+  verifyOtp: (data: VerifyOtpPayload) => api.post('/auth/verify-otp', data),
+  resendOtp: (data: ResendOtpPayload) => api.post('/auth/resend-otp', data),
   logout: () => api.post('/auth/logout'),
   refresh: () => api.post('/auth/refresh'),
   verifyEmail: (token: string) => api.get(`/auth/verify-email/${token}`),

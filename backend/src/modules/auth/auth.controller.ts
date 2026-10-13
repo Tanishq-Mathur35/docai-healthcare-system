@@ -22,11 +22,25 @@ export class AuthController {
   async login(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const result = await authService.login(req.body, req);
+      res.json(successResponse('OTP verification code sent to your email', result));
+    } catch (err) { next(err); }
+  }
+
+  async verifyOtp(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const result = await authService.verifyOtp(req.body, req);
       res.cookie('refreshToken', result.refreshToken, REFRESH_COOKIE_OPTIONS);
-      res.json(successResponse('Login successful', {
+      res.json(successResponse('OTP verified successfully', {
         accessToken: result.accessToken,
         user: result.user,
       }));
+    } catch (err) { next(err); }
+  }
+
+  async resendOtp(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const result = await authService.resendOtp(req.body);
+      res.json(successResponse(result.message, result));
     } catch (err) { next(err); }
   }
 

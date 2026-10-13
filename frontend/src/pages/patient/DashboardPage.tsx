@@ -11,6 +11,7 @@ import {
 import { patientService } from '@/services/patient.service';
 import { appointmentService } from '@/services/appointment.service';
 import { useAuthStore } from '@/store/authStore';
+import { useTranslation } from '@/store/languageStore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
@@ -26,6 +27,7 @@ const commonSymptoms = [
 
 export default function PatientDashboard() {
   const { user } = useAuthStore();
+  const { language, t } = useTranslation();
   const navigate = useNavigate();
 
   const { data: profileRes, isLoading: profileLoading } = useQuery({
@@ -87,18 +89,20 @@ export default function PatientDashboard() {
           <div className="space-y-2 max-w-2xl">
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/20 backdrop-blur-md text-xs font-semibold text-sky-100">
               <Sparkles className="h-3.5 w-3.5 text-amber-200" />
-              <span>DocAI 24/7 Smart Health Companion</span>
+              <span>{t.patientPortal} · 24/7 AI Companion</span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-black tracking-tight">
-              Hello, {user?.firstName || 'there'}! How are you feeling today?
+              {t.welcomeBack}, {user?.firstName || 'there'}!
             </h1>
             <p className="text-sky-100 text-sm leading-relaxed">
-              Describe any symptoms, review medical reports, or consult top board-certified physicians from the comfort of your home.
+              {t.healthOverviewDesc}
             </p>
 
             {/* Quick symptom trigger chips */}
             <div className="pt-2 flex flex-wrap gap-2 items-center">
-              <span className="text-xs font-medium text-sky-100">Try asking about:</span>
+              <span className="text-xs font-medium text-sky-100">
+                {language === 'hi' ? 'लक्षण चुनें:' : 'Try asking about:'}
+              </span>
               {commonSymptoms.map((sym, idx) => (
                 <button
                   key={idx}
@@ -118,7 +122,7 @@ export default function PatientDashboard() {
               className="bg-white text-sky-700 hover:bg-sky-50 font-bold rounded-2xl shadow-lg shadow-sky-900/10 text-sm gap-2"
             >
               <Link to="/patient/consultations">
-                <Sparkles className="h-4 w-4 text-sky-600" /> Start AI Health Check
+                <Sparkles className="h-4 w-4 text-sky-600" /> {t.startAiConsultation}
               </Link>
             </Button>
             <Button
@@ -128,7 +132,7 @@ export default function PatientDashboard() {
               className="border-white/30 bg-white/10 hover:bg-white/20 text-white font-semibold rounded-2xl text-sm gap-2 backdrop-blur-sm"
             >
               <Link to="/patient/appointments">
-                <Calendar className="h-4 w-4" /> Book Doctor Visit
+                <Calendar className="h-4 w-4" /> {t.bookAppointment}
               </Link>
             </Button>
           </div>

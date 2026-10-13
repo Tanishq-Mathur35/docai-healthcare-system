@@ -18,6 +18,15 @@ export class AdminController {
     }
   }
 
+  async getUserProfile(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const data = await adminService.getUserProfile(req.params.id);
+      res.json(successResponse('User profile retrieved', data));
+    } catch (err) {
+      next(err);
+    }
+  }
+
   async toggleStatus(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const { isActive } = req.body;

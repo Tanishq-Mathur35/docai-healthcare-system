@@ -23,12 +23,20 @@ export async function generateReportNode(state: ConsultationStateType): Promise<
         .join('\n\n')
     : 'Relying on internal clinical knowledge base for natural supportive care.';
 
+  const pastRecordsSummary =
+    state.pastConditions && state.pastConditions.length > 0
+      ? state.pastConditions
+          .map((c) => `${c.conditionName} (${c.conditionType}${c.description ? `: ${c.description}` : ''})`)
+          .join('; ')
+      : 'None recorded';
+
   const patientContext = `
 Patient Age: ${state.patientProfile.age ?? 'Not specified'}
 Gender: ${state.patientProfile.gender ?? 'Not specified'}
 Blood Group: ${state.patientProfile.bloodGroup ?? 'Unknown'}
 Known Allergies: ${state.patientProfile.allergies.join(', ') || 'None recorded'}
 Chronic Conditions: ${state.patientProfile.chronicDiseases.join(', ') || 'None recorded'}
+Previous Medical History & Uploaded Records (Surgeries, Heart Attacks, Diabetes, Prescriptions, Lab Reports): ${pastRecordsSummary}
 Chief Complaint: ${state.chiefComplaint}
 Related Past Condition: ${state.relatedConditionContext || 'None'}
 Symptoms Gathered: ${state.collectedSymptoms.join(', ')}

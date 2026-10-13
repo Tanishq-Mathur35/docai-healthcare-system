@@ -21,21 +21,28 @@ cp python-service/.env.example python-service/.env
 
 ### 🤖 AI Service Keys (Required)
 
-#### `GEMINI_API_KEY` (Recommended — 100% Free Tier)
+#### `MISTRAL_API_KEY` (Exclusive LLM Provider)
 
-Google's Gemini 1.5 Flash / 2.0 Flash engine for adaptive, empathetic medical dialogue.
+Mistral AI platform (`open-mistral-nemo` / `open-mistral-7b`) is configured as the **exclusive AI provider** across the entire platform for patient consultations, clinical tool analysis (T01–T04), medical report generation, and question generation.
 
 **How to get it:**
-1. Go to **[https://aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey)**
-2. Sign in with your Google Account
-3. Click **"Create API key"**
-4. Copy the key (starts with `AIzaSy...`)
 
-```
-GEMINI_API_KEY=AIzaSy...
+1. Go to **[https://console.mistral.ai](https://console.mistral.ai)**
+2. Sign up or log in
+3. Click **"API Keys"** in the left sidebar
+4. Click **"Create new key"** and copy
+5. Paste it in `backend/.env`:
+
+```env
+MISTRAL_API_KEY=PhNPgeIXCgu3aE5wyWvkAJRfoVEdS0uF
+MISTRAL_MODEL=open-mistral-nemo
 ```
 
-> **Free tier:** 15 RPM, 1,500 requests/day, 1,000,000 TPM with no credit card required.
+---
+
+#### Gemini & OpenAI (Disabled)
+
+*Disabled by configuration.* Both Gemini and OpenAI are completely bypassed in favor of Mistral AI.
 
 ---
 
@@ -44,6 +51,7 @@ GEMINI_API_KEY=AIzaSy...
 Ultra-fast open models (Llama 3.3 70B Versatile).
 
 **How to get it:**
+
 1. Go to **[https://console.groq.com/keys](https://console.groq.com/keys)**
 2. Sign up or log in
 3. Click **"Create API Key"**
@@ -60,6 +68,7 @@ GROQ_API_KEY=gsk_...
 Mistral AI platform (`mistral-small-latest`).
 
 **How to get it:**
+
 1. Go to **[https://console.mistral.ai](https://console.mistral.ai)**
 2. Sign up or log in
 3. Click **"API Keys"** in the left sidebar

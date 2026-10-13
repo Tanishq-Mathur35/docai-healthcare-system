@@ -15,7 +15,13 @@ export class AiService {
       where: { userId },
       include: {
         user: true,
-        medicalHistory: { where: { isActive: true } },
+        medicalHistory: {
+          orderBy: [{ diagnosedAt: 'desc' }, { createdAt: 'desc' }],
+        },
+        documents: {
+          orderBy: { uploadedAt: 'desc' },
+          take: 10,
+        },
       },
     });
 
@@ -31,6 +37,37 @@ export class AiService {
       },
     });
 
+    const recordsContextParts: string[] = [];
+    if (patient.medicalHistory.length > 0) {
+      recordsContextParts.push(
+        'Chronological Medical History: ' +
+          patient.medicalHistory
+            .map(
+              (m) =>
+                `${m.conditionName} (${m.conditionType}, ${m.isActive ? 'Active' : 'Past/Resolved'}${
+                  m.description ? `: ${m.description}` : ''
+                }${m.medications?.length ? `, Past meds: ${m.medications.join(', ')}` : ''})`
+            )
+            .join(' | ')
+      );
+    }
+    if (patient.documents.length > 0) {
+      recordsContextParts.push(
+        'Uploaded Medical Records & Reports: ' +
+          patient.documents
+            .map(
+              (d) =>
+                `[${d.documentType}] ${d.originalName}${
+                  d.extractedText ? `: ${d.extractedText.slice(0, 300)}` : ''
+                }`
+            )
+            .join(' | ')
+      );
+    }
+    if (patient.currentMedications?.length > 0) {
+      recordsContextParts.push(`Current Medications: ${patient.currentMedications.join(', ')}`);
+    }
+
     // Initial state
     const initialState: ConsultationStateType = {
       patientId: patient.id,
@@ -43,12 +80,20 @@ export class AiService {
         allergies: patient.allergies,
         chronicDiseases: patient.chronicDiseases,
       },
-      pastConditions: patient.medicalHistory.map((m) => ({
-        id: m.id,
-        conditionName: m.conditionName,
-        conditionType: m.conditionType,
-        description: m.description ?? undefined,
-      })),
+      pastConditions: [
+        ...patient.medicalHistory.map((m) => ({
+          id: m.id,
+          conditionName: m.conditionName,
+          conditionType: m.conditionType,
+          description: `${m.isActive ? 'Active' : 'Past/Resolved'}${m.description ? ` - ${m.description}` : ''}`,
+        })),
+        ...patient.documents.map((d) => ({
+          id: d.id,
+          conditionName: `Uploaded ${d.documentType}: ${d.originalName}`,
+          conditionType: d.documentType,
+          description: d.extractedText ? d.extractedText.slice(0, 250) : `Document on file (${d.originalName})`,
+        })),
+      ],
       messages: [
         {
           role: 'user',
@@ -63,7 +108,7 @@ export class AiService {
       isEmergencyFlagged: false,
       relatedConditionId: undefined,
       conditionRelevance: undefined,
-      relatedConditionContext: undefined,
+      relatedConditionContext: recordsContextParts.join('\n') || undefined,
       emergencyReason: undefined,
       currentQuestion: undefined,
       generatedReport: undefined,

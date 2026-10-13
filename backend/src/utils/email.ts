@@ -89,3 +89,29 @@ export async function sendAppointmentConfirmationEmail(
     logger.error(`Failed to send appointment confirmation to ${to}: ${(err as Error).message}`);
   }
 }
+
+export async function sendLoginOtpEmail(to: string, firstName: string, otp: string): Promise<void> {
+  logger.info(`🔐 [2FA OTP] Login verification code for ${to}: ${otp} (valid for 5 minutes)`);
+
+  try {
+    await transporter.sendMail({
+      from: `"DocAI Security" <${env.EMAIL_FROM}>`,
+      to,
+      subject: `${otp} is your DocAI 2FA Login Verification Code`,
+      html: `
+        <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px;border:1px solid #e2e8f0;border-radius:12px">
+          <h2 style="color:#0f172a;margin-top:0">Two-Factor Authentication (2FA)</h2>
+          <p style="color:#334155">Hi ${firstName},</p>
+          <p style="color:#334155">Use the following One-Time Password (OTP) to complete your sign-in to DocAI:</p>
+          <div style="margin:24px 0;padding:16px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;text-align:center">
+            <span style="font-size:32px;font-weight:800;letter-spacing:8px;color:#0284c7">${otp}</span>
+          </div>
+          <p style="color:#64748b;font-size:13px">This code will expire in <strong>5 minutes</strong>. Do not share this code with anyone.</p>
+        </div>`,
+    });
+    logger.info(`2FA OTP email sent to ${to}`);
+  } catch (err) {
+    logger.warn(`SMTP delivery notice for ${to}: ${(err as Error).message}. Use terminal OTP: ${otp}`);
+  }
+}
+

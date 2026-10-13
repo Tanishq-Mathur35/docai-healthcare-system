@@ -9,6 +9,7 @@ router.use(authenticate, authorize('ADMIN'));
 
 // User management
 router.get('/users', adminController.getUsers.bind(adminController));
+router.get('/users/:id', adminController.getUserProfile.bind(adminController));
 router.patch('/users/:id/status', adminController.toggleStatus.bind(adminController));
 router.patch('/doctors/:id/verify', adminController.verifyDoctor.bind(adminController));
 

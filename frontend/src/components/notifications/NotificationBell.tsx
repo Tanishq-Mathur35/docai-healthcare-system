@@ -5,6 +5,7 @@ import { Bell, Check, Pill, AlertCircle, Info, ExternalLink, X } from 'lucide-re
 import { patientService } from '@/services/patient.service';
 import { getSocket } from '@/lib/socket';
 import { useToast } from '@/store/notificationStore';
+import { useTranslation } from '@/store/languageStore';
 import { formatDateTime } from '@/lib/utils';
 
 export function NotificationBell() {
@@ -12,6 +13,7 @@ export function NotificationBell() {
   const dropdownRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
   const { toast, success } = useToast();
+  const { t } = useTranslation();
   const navigate = useNavigate();
 
   // Fetch notifications
@@ -45,7 +47,7 @@ export function NotificationBell() {
     const socket = getSocket();
 
     const handlePrescriptionAlert = (data: any) => {
-      success(data.title || '💊 New Prescription Issued!', data.body || 'A doctor has issued a new prescription.');
+      success(data.title || '💊 New Prescription Issued!', data.body || data.message || 'A doctor has issued a new prescription.');
       queryClient.invalidateQueries({ queryKey: ['patient-notifications'] });
       queryClient.invalidateQueries({ queryKey: ['patient-prescriptions'] });
       queryClient.invalidateQueries({ queryKey: ['patient-dashboard'] });
@@ -54,7 +56,7 @@ export function NotificationBell() {
     const handleGeneralNotification = (data: any) => {
       toast({
         title: data.title || 'New Healthcare Notification',
-        description: data.body,
+        description: data.body || data.message,
         variant: 'default',
       });
       queryClient.invalidateQueries({ queryKey: ['patient-notifications'] });
@@ -117,7 +119,7 @@ export function NotificationBell() {
           {/* Header */}
           <div className="p-3.5 bg-gradient-to-r from-sky-50 to-teal-50 border-b border-sky-100 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className="font-extrabold text-sm text-slate-900">Notifications</span>
+              <span className="font-extrabold text-sm text-slate-900">{t.notifications}</span>
               {unreadCount > 0 && (
                 <span className="px-2 py-0.5 rounded-full bg-sky-200/80 text-sky-800 text-[11px] font-bold">
                   {unreadCount} new
@@ -130,7 +132,7 @@ export function NotificationBell() {
                 className="text-[11px] text-sky-700 hover:text-sky-900 font-bold hover:underline flex items-center gap-1"
                 disabled={markAllReadMutation.isPending}
               >
-                <Check className="h-3 w-3" /> Mark all read
+                <Check className="h-3 w-3" /> {t.markAllRead}
               </button>
             )}
           </div>
@@ -140,8 +142,8 @@ export function NotificationBell() {
             {notifications.length === 0 ? (
               <div className="p-8 text-center text-slate-400 space-y-2">
                 <Bell className="h-8 w-8 mx-auto text-slate-300 stroke-[1.5]" />
-                <p className="text-xs font-semibold text-slate-600">You're all caught up!</p>
-                <p className="text-[11px] text-slate-400">Doctor issued prescriptions and alerts appear here.</p>
+                <p className="text-xs font-semibold text-slate-600">{t.noNotifications}</p>
+                <p className="text-[11px] text-slate-400">Doctor issued prescriptions and emergency alerts appear here.</p>
               </div>
             ) : (
               notifications.map((notif: any) => {

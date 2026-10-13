@@ -48,6 +48,78 @@ export class AdminService {
     return { users, meta: buildPaginationMeta(total, page, limit) };
   }
 
+  async getUserProfile(userId: string) {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        firstName: true,
+        lastName: true,
+        phone: true,
+        avatarUrl: true,
+        isEmailVerified: true,
+        isActive: true,
+        lastLoginAt: true,
+        createdAt: true,
+        patient: {
+          include: {
+            medicalHistory: {
+              orderBy: { createdAt: 'desc' },
+              take: 10,
+            },
+            documents: {
+              orderBy: { uploadedAt: 'desc' },
+              take: 10,
+            },
+            consultations: {
+              orderBy: { startedAt: 'desc' },
+              take: 5,
+              select: {
+                id: true,
+                chiefComplaint: true,
+                status: true,
+                startedAt: true,
+                completedAt: true,
+                report: { select: { id: true, riskLevel: true, confidenceScore: true } },
+              },
+            },
+            appointments: {
+              orderBy: { appointmentDate: 'desc' },
+              take: 5,
+              include: {
+                doctor: {
+                  include: {
+                    user: { select: { firstName: true, lastName: true } },
+                  },
+                },
+              },
+            },
+          },
+        },
+        doctor: {
+          include: {
+            appointments: {
+              orderBy: { appointmentDate: 'desc' },
+              take: 5,
+              include: {
+                patient: {
+                  include: {
+                    user: { select: { firstName: true, lastName: true } },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!user) throw new AppError('User profile not found', 404, 'NOT_FOUND');
+    return user;
+  }
+
   async toggleUserStatus(adminId: string, targetUserId: string, isActive: boolean, req: Request) {
     const user = await prisma.user.findUnique({ where: { id: targetUserId } });
     if (!user) throw new AppError('User not found', 404, 'NOT_FOUND');
@@ -101,6 +173,8 @@ export class AdminService {
       totalAppointments,
       totalReports,
       completedConsultations,
+      totalEmergencyRequests,
+      recentActivities,
     ] = await Promise.all([
       prisma.patient.count(),
       prisma.doctor.count(),
@@ -108,6 +182,14 @@ export class AdminService {
       prisma.appointment.count(),
       prisma.report.count(),
       prisma.consultation.count({ where: { status: 'COMPLETED' } }),
+      prisma.notification.count({ where: { type: 'EMERGENCY_ALERT' } }),
+      prisma.auditLog.findMany({
+        take: 10,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          user: { select: { firstName: true, lastName: true, role: true, email: true } },
+        },
+      }),
     ]);
 
     // Monthly consultation trend for the last 6 months
@@ -140,8 +222,10 @@ export class AdminService {
         totalConsultations,
         totalAppointments,
         totalReports,
+        totalEmergencyRequests,
         completionRate: totalConsultations > 0 ? ((completedConsultations / totalConsultations) * 100).toFixed(1) : '0',
       },
+      recentActivities,
       monthlyTrends,
     };
   }

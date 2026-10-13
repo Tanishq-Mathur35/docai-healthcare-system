@@ -43,10 +43,14 @@ import ReportDecodedPage from "../pages/tools/ReportDecodedPage";
 import GoingHomeRightPage from "../pages/tools/GoingHomeRightPage";
 import BolKeBataoPage from "../pages/tools/BolKeBataoPage";
 
+// Public pages
+import LandingPage from "../pages/public/LandingPage";
+
 export default function AppRoutes() {
   return (
     <Routes>
       {/* Public Routes */}
+      <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
@@ -104,8 +108,7 @@ export default function AppRoutes() {
       </Route>
 
       {/* Fallback */}
-      <Route path="/" element={<Navigate to="/login" replace />} />
-      <Route path="*" element={<Navigate to="/login" replace />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }

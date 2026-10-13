@@ -48,57 +48,19 @@ export class MultiProviderLLM {
       return { role, content };
     });
 
-    const errors: string[] = [];
-
-    // 1. Try Google Gemini if key is provided
-    const geminiKey = this.getGeminiKey();
-    if (geminiKey) {
-      try {
-        const result = await this.callGemini(formattedMessages, geminiKey, options);
-        return { content: result, provider: 'Google Gemini' };
-      } catch (err: any) {
-        errors.push(`Gemini: ${err.message}`);
-        logger.warn(`⚠️ Google Gemini attempt failed: ${err.message}. Trying next provider...`);
-      }
-    }
-
-    // 2. Try Groq (Llama 3.3 70B) if key is provided
-    const groqKey = this.getGroqKey();
-    if (groqKey) {
-      try {
-        const result = await this.callGroq(formattedMessages, groqKey, options);
-        return { content: result, provider: 'Groq (Llama 3.3)' };
-      } catch (err: any) {
-        errors.push(`Groq: ${err.message}`);
-        logger.warn(`⚠️ Groq attempt failed: ${err.message}. Trying next provider...`);
-      }
-    }
-
-    // 3. Try OpenAI if key is provided
-    const openaiKey = this.getOpenAIKey();
-    if (openaiKey) {
-      try {
-        const result = await this.callOpenAI(formattedMessages, openaiKey, options);
-        return { content: result, provider: 'OpenAI (GPT-4o-mini)' };
-      } catch (err: any) {
-        errors.push(`OpenAI: ${err.message}`);
-        logger.warn(`⚠️ OpenAI attempt failed: ${err.message}. Trying next provider...`);
-      }
-    }
-
-    // 4. Try Mistral if key is provided
+    // MISTRAL ONLY: As explicitly requested, use ONLY Mistral AI (no Gemini, no OpenAI, no other providers)
     const mistralKey = this.getMistralKey();
-    if (mistralKey) {
-      try {
-        const result = await this.callMistral(formattedMessages, mistralKey, options);
-        return { content: result, provider: 'Mistral AI' };
-      } catch (err: any) {
-        errors.push(`Mistral: ${err.message}`);
-        logger.warn(`⚠️ Mistral attempt failed: ${err.message}.`);
-      }
+    if (!mistralKey) {
+      throw new Error('MISTRAL_API_KEY is not configured in backend/.env. Please set MISTRAL_API_KEY.');
     }
 
-    throw new Error(`All LLM providers failed or no valid API keys configured: ${errors.join(' | ')}`);
+    try {
+      const result = await this.callMistral(formattedMessages, mistralKey, options);
+      return { content: result, provider: 'Mistral AI' };
+    } catch (err: any) {
+      logger.error(`❌ Mistral AI invocation failed: ${err.message}`);
+      throw new Error(`Mistral AI failed: ${err.message}`);
+    }
   }
 
   // --- Provider 1: Google Gemini ---
@@ -194,54 +156,122 @@ export class MultiProviderLLM {
     return content.trim();
   }
 
-  // --- Provider 3: OpenAI ---
+  // --- Provider 1: OpenAI (Primary) ---
   private async callOpenAI(messages: ChatMessage[], apiKey: string, options: LLMInvokeOptions): Promise<string> {
-    const response = await axios.post(
-      'https://api.openai.com/v1/chat/completions',
-      {
-        model: 'gpt-4o-mini',
-        messages,
-        temperature: options.temperature ?? 0.2,
-        max_tokens: options.maxTokens ?? 2048,
-        response_format: options.jsonMode !== false ? { type: 'json_object' } : undefined,
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        timeout: 25000,
-      }
-    );
+    const model = process.env.OPENAI_MODEL || (env as any).OPENAI_MODEL || 'gpt-4o-mini';
 
-    const content = response.data.choices?.[0]?.message?.content;
-    if (!content) throw new Error('OpenAI returned empty choices');
-    return content.trim();
+    const messagesPayload: any[] = messages.map((m, idx) => {
+      // If there are vision images and this is the last user message, attach multimodal contents
+      if (options.images && options.images.length > 0 && m.role === 'user' && idx === messages.length - 1) {
+        return {
+          role: m.role,
+          content: [
+            { type: 'text', text: m.content },
+            ...options.images.map((img) => ({
+              type: 'image_url',
+              image_url: {
+                url: `data:${img.mimeType};base64,${img.base64Data}`,
+              },
+            })),
+          ],
+        };
+      }
+      return {
+        role: m.role,
+        content: m.content,
+      };
+    });
+
+    try {
+      const response = await axios.post(
+        'https://api.openai.com/v1/chat/completions',
+        {
+          model,
+          messages: messagesPayload,
+          temperature: options.temperature ?? 0.2,
+          max_tokens: options.maxTokens ?? 2500,
+          response_format: options.jsonMode !== false ? { type: 'json_object' } : undefined,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          timeout: 45000,
+        }
+      );
+
+      const content = response.data.choices?.[0]?.message?.content;
+      if (!content) throw new Error('OpenAI returned empty choices');
+      return content.trim();
+    } catch (err: any) {
+      const apiErr = err.response?.data?.error?.message || err.message;
+      throw new Error(`OpenAI API error (${model}): ${apiErr}`);
+    }
   }
 
-  // --- Provider 4: Mistral AI ---
+  // --- Mistral AI (Exclusive LLM Provider) ---
   private async callMistral(messages: ChatMessage[], apiKey: string, options: LLMInvokeOptions): Promise<string> {
-    const response = await axios.post(
-      'https://api.mistral.ai/v1/chat/completions',
-      {
-        model: 'mistral-small-latest',
-        messages,
-        temperature: options.temperature ?? 0.2,
-        max_tokens: options.maxTokens ?? 2048,
-        response_format: options.jsonMode !== false ? { type: 'json_object' } : undefined,
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        timeout: 25000,
-      }
+    const configuredModel = process.env.MISTRAL_MODEL || (env as any).MISTRAL_MODEL || 'open-mistral-nemo';
+    const modelsToTry = [configuredModel, 'open-mistral-7b', 'open-mixtral-8x7b', 'mistral-small-latest'].filter(
+      (m, idx, self) => self.indexOf(m) === idx
     );
 
-    const content = response.data.choices?.[0]?.message?.content;
-    if (!content) throw new Error('Mistral returned empty choices');
-    return content.trim();
+    let lastError: any = null;
+
+    const messagesPayload: any[] = messages.map((m, idx) => {
+      if (options.images && options.images.length > 0 && m.role === 'user' && idx === messages.length - 1) {
+        return {
+          role: m.role,
+          content: [
+            { type: 'text', text: m.content },
+            ...options.images.map((img) => ({
+              type: 'image_url',
+              image_url: {
+                url: `data:${img.mimeType};base64,${img.base64Data}`,
+              },
+            })),
+          ],
+        };
+      }
+      return {
+        role: m.role,
+        content: m.content,
+      };
+    });
+
+    for (const model of modelsToTry) {
+      try {
+        const response = await axios.post(
+          'https://api.mistral.ai/v1/chat/completions',
+          {
+            model,
+            messages: messagesPayload,
+            temperature: options.temperature ?? 0.2,
+            max_tokens: options.maxTokens ?? 2500,
+            response_format: options.jsonMode !== false ? { type: 'json_object' } : undefined,
+          },
+          {
+            headers: {
+              Authorization: `Bearer ${apiKey}`,
+              'Content-Type': 'application/json',
+            },
+            timeout: 35000,
+          }
+        );
+
+        const content = response.data.choices?.[0]?.message?.content;
+        if (!content) throw new Error(`Mistral (${model}) returned empty choices`);
+        return content.trim();
+      } catch (err: any) {
+        lastError = err;
+        const msg = err.response?.data?.message || err.message;
+        logger.warn(`⚠️ Mistral model ${model} error: ${msg}. Trying next Mistral model if available...`);
+      }
+    }
+
+    const finalErrMsg = lastError?.response?.data?.message || lastError?.message || 'Unknown error';
+    throw new Error(`Mistral AI error: ${finalErrMsg}`);
   }
 }
 

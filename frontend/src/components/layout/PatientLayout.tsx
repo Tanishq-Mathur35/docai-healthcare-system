@@ -1,5 +1,6 @@
-import { useState } from "react";
-import { Outlet, NavLink, Link, useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { Outlet, NavLink, Link } from "react-router-dom";
+import { io } from "socket.io-client";
 import {
   LayoutDashboard,
   User,
@@ -11,91 +12,135 @@ import {
   Stethoscope,
   Pill,
   HeartPulse,
-  ShieldAlert,
-  PhoneCall,
   X,
   Menu,
   Sparkles,
-  ChevronRight,
-  ArrowRight,
-  Ambulance,
   Languages,
   Home,
   FileCheck2,
   Clock,
+  Sun,
+  Moon,
+  Video,
 } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import { useLogout } from "@/hooks/useAuth";
 import { getInitials } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
-
-const navItems = [
-  { to: "/patient/dashboard", icon: LayoutDashboard, label: "Home Dashboard" },
-  {
-    to: "/patient/consultations",
-    icon: Stethoscope,
-    label: "AI Health Assistant",
-    highlight: true,
-  },
-  { to: "/patient/report-decoded", icon: FileCheck2, label: "Report Decoded", highlight: true },
-  { to: "/patient/going-home-right", icon: Home, label: "Going Home Right" },
-  { to: "/patient/bol-ke-batao", icon: Languages, label: "Bol Ke Batao (Voice)" },
-  { to: "/patient/two-minute-doctor", icon: Clock, label: "2-Min OPD Pre-Consult" },
-  { to: "/patient/appointments", icon: Calendar, label: "Doctor Appointments" },
-  { to: "/patient/prescriptions", icon: Pill, label: "My Prescriptions" },
-  { to: "/patient/documents", icon: FileText, label: "Medical Documents" },
-  {
-    to: "/patient/medical-history",
-    icon: ClipboardList,
-    label: "Health Profile",
-  },
-  { to: "/patient/chat", icon: MessageSquare, label: "Doctor Messages" },
-  { to: "/patient/profile", icon: User, label: "Account Settings" },
-];
+import { useThemeStore } from "@/store/themeStore";
+import { useTranslation } from "@/store/languageStore";
+import EmergencyVideoModal from "@/components/emergency/EmergencyVideoModal";
+import { EmergencyCallRecord } from "@/services/emergency.service";
+import { useToast } from "@/store/notificationStore";
 
 export default function PatientLayout() {
-  const { user } = useAuthStore();
+  const { user, accessToken } = useAuthStore();
   const logoutMutation = useLogout();
+  const { theme, toggleTheme } = useThemeStore();
+  const { language, toggleLanguage, t } = useTranslation();
+  const { success } = useToast();
+
   const [showEmergencyModal, setShowEmergencyModal] = useState(false);
+  const [activeEmergencyCall, setActiveEmergencyCall] = useState<EmergencyCallRecord | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
+  const navItems = [
+    { to: "/patient/dashboard", icon: LayoutDashboard, label: t.dashboard },
+    {
+      to: "/patient/consultations",
+      icon: Stethoscope,
+      label: t.aiConsultation,
+      highlight: true,
+    },
+    { to: "/patient/report-decoded", icon: FileCheck2, label: t.reportDecoded, highlight: true },
+    { to: "/patient/going-home-right", icon: Home, label: t.goingHomeRight },
+    { to: "/patient/bol-ke-batao", icon: Languages, label: t.bolKeBatao },
+    { to: "/patient/two-minute-doctor", icon: Clock, label: t.twoMinDoctor },
+    { to: "/patient/appointments", icon: Calendar, label: t.appointments },
+    {
+      to: "/patient/medical-history",
+      icon: ClipboardList,
+      label: t.medicalHistory,
+    },
+    { to: "/patient/documents", icon: FileText, label: t.documents },
+    { to: "/patient/prescriptions", icon: Pill, label: language === "hi" ? "डॉक्टर के पर्चे" : "My Prescriptions" },
+    { to: "/patient/chat", icon: MessageSquare, label: t.messages },
+    { to: "/patient/profile", icon: User, label: t.profile },
+  ];
+
+  // Listen for live emergency call acceptance/reassignment notifications
+  useEffect(() => {
+    if (!accessToken) return;
+    const socketUrl = import.meta.env.VITE_API_BASE_URL
+      ? import.meta.env.VITE_API_BASE_URL.replace("/api/v1", "")
+      : window.location.origin;
+
+    const socket = io(socketUrl, {
+      auth: { token: accessToken },
+      transports: ["websocket", "polling"],
+    });
+
+    socket.on("emergency_accepted", (call: EmergencyCallRecord) => {
+      setActiveEmergencyCall(call);
+      setShowEmergencyModal(true);
+      success(
+        language === "hi" ? "डॉक्टर वीडियो कॉल से जुड़ गए हैं!" : "Doctor Accepted Emergency Call!",
+        `${call.assignedDoctorName} (${call.assignedDoctorSpecialization})`
+      );
+    });
+
+    socket.on("emergency_reassigned", (call: EmergencyCallRecord & { message?: string }) => {
+      setActiveEmergencyCall(call);
+      success(
+        language === "hi" ? "कॉल दूसरे उपलब्ध डॉक्टर को भेजी गई" : "Emergency Call Reassigned",
+        call.message || `Assigned to ${call.assignedDoctorName}`
+      );
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [accessToken, language]);
+
   return (
-    <div className="flex h-screen bg-[#F8FAFC] text-slate-800 overflow-hidden font-sans">
+    <div className="flex h-screen bg-[#F8FAFC] dark:bg-slate-950 text-slate-800 dark:text-slate-100 overflow-hidden font-sans transition-colors duration-200">
       {/* ── Friendly Rounded Sidebar (Desktop) ── */}
-      <aside className="hidden md:flex w-64 border-r border-sky-100 bg-white flex-col z-20 shadow-sm">
+      <aside className="hidden md:flex w-64 border-r border-sky-100 dark:border-slate-800 bg-white dark:bg-slate-900 flex-col z-20 shadow-sm">
         {/* Brand Header */}
-        <div className="p-5 border-b border-sky-100/80">
+        <div className="p-5 border-b border-sky-100/80 dark:border-slate-800">
           <Link to="/patient/dashboard" className="flex items-center gap-3">
             <div className="h-10 w-10 bg-gradient-to-tr from-sky-500 to-teal-400 rounded-2xl flex items-center justify-center shadow-md shadow-sky-500/20 text-white">
               <HeartPulse className="h-5 w-5" />
             </div>
             <div>
-              <span className="font-extrabold text-xl text-slate-900 tracking-tight">
+              <span className="font-extrabold text-xl text-slate-900 dark:text-white tracking-tight">
                 DocAI
               </span>
-              <span className="text-[10px] block text-sky-600 font-bold uppercase tracking-wider">
-                Health Companion
+              <span className="text-[10px] block text-sky-600 dark:text-sky-400 font-bold uppercase tracking-wider">
+                {t.patientPortal}
               </span>
             </div>
           </Link>
         </div>
 
         {/* AI Quick Start Widget in Sidebar */}
-        <div className="p-3 mx-3 my-2 rounded-2xl bg-gradient-to-r from-sky-50 to-emerald-50 border border-sky-100">
-          <div className="flex items-center gap-2 text-sky-800 text-xs font-bold mb-1">
+        <div className="p-3 mx-3 my-2 rounded-2xl bg-gradient-to-r from-sky-50 to-emerald-50 dark:from-sky-950/50 dark:to-emerald-950/40 border border-sky-100 dark:border-slate-800">
+          <div className="flex items-center gap-2 text-sky-800 dark:text-sky-300 text-xs font-bold mb-1">
             <Sparkles className="h-3.5 w-3.5 text-sky-500" />
-            <span>AI Symptom Checker</span>
+            <span>{t.aiConsultation}</span>
           </div>
-          <p className="text-[11px] text-slate-600 mb-2">
-            Feeling unwell? Check symptoms 24/7
+          <p className="text-[11px] text-slate-600 dark:text-slate-400 mb-2">
+            {language === "hi"
+              ? "लक्षण बताएं और घरेलू उपचार पाएं"
+              : "Check symptoms & home remedies 24/7"}
           </p>
           <Button
             asChild
             size="sm"
             className="w-full bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold rounded-xl shadow-sm"
           >
-            <Link to="/patient/consultations">Start Consultation</Link>
+            <Link to="/patient/consultations">{t.startAiConsultation}</Link>
           </Button>
         </div>
 
@@ -110,8 +155,8 @@ export default function PatientLayout() {
                   isActive
                     ? "bg-sky-500 text-white shadow-md shadow-sky-500/20"
                     : highlight
-                      ? "text-sky-700 bg-sky-50/70 hover:bg-sky-100/80 font-bold"
-                      : "text-slate-600 hover:bg-slate-100/80 hover:text-slate-900"
+                      ? "text-sky-700 dark:text-sky-300 bg-sky-50/70 dark:bg-sky-950/40 hover:bg-sky-100/80 font-bold"
+                      : "text-slate-600 dark:text-slate-300 hover:bg-slate-100/80 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white"
                 }`
               }
             >
@@ -122,29 +167,29 @@ export default function PatientLayout() {
         </nav>
 
         {/* User Card & Logout */}
-        <div className="p-4 border-t border-sky-100 bg-slate-50/60">
+        <div className="p-4 border-t border-sky-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/60">
           <div className="flex items-center gap-3 mb-3">
             <div className="h-9 w-9 rounded-xl bg-gradient-to-tr from-sky-400 to-teal-300 flex items-center justify-center text-white text-xs font-bold shadow-sm flex-shrink-0">
               {user ? getInitials(user.firstName, user.lastName) : "PT"}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-bold text-slate-900 truncate">
+              <p className="text-xs font-bold text-slate-900 dark:text-white truncate">
                 {user?.firstName} {user?.lastName}
               </p>
-              <span className="text-[10px] text-emerald-600 font-bold bg-emerald-100/70 px-1.5 py-0.2 rounded-full inline-block">
-                Active Member
+              <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-100/70 dark:bg-emerald-950/60 px-1.5 py-0.2 rounded-full inline-block">
+                {t.patientPortal}
               </span>
             </div>
           </div>
           <Button
             variant="ghost"
             size="sm"
-            className="w-full justify-start text-xs text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-xl"
+            className="w-full justify-start text-xs text-slate-600 dark:text-slate-300 hover:text-red-600 hover:bg-red-50 rounded-xl"
             onClick={() => logoutMutation.mutate()}
             disabled={logoutMutation.isPending}
           >
             <LogOut className="h-3.5 w-3.5 mr-2" />
-            Sign Out
+            {t.signOut}
           </Button>
         </div>
       </aside>
@@ -152,34 +197,55 @@ export default function PatientLayout() {
       {/* ── Main Patient Companion Container ── */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Friendly Top Header */}
-        <header className="h-16 border-b border-sky-100 bg-white/90 backdrop-blur-md px-6 flex items-center justify-between z-10">
+        <header className="h-16 border-b border-sky-100 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md px-4 sm:px-6 flex items-center justify-between z-10">
           <div className="flex items-center gap-3">
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="md:hidden h-9 w-9 rounded-xl border border-slate-200 flex items-center justify-center text-slate-600"
+              className="md:hidden h-9 w-9 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300"
             >
               <Menu className="h-5 w-5" />
             </button>
             <div>
-              <span className="text-xs font-medium text-slate-500">
-                Welcome back,
+              <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                {t.welcomeBack},
               </span>
-              <h2 className="text-sm sm:text-base font-extrabold text-slate-900">
+              <h2 className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white">
                 {user?.firstName} {user?.lastName} 👋
               </h2>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            {/* Prominent Emergency Helpline Button */}
+          <div className="flex items-center gap-2 sm:gap-3">
+            {/* Prominent Emergency Live Video Call Button */}
             <button
               onClick={() => setShowEmergencyModal(true)}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-red-50 hover:bg-red-100 border border-red-200 text-red-700 font-bold text-xs shadow-sm transition-all animate-pulse"
-              title="Immediate Emergency Assistance"
+              className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-xs shadow-sm transition-all animate-pulse"
+              title="Immediate Live Video Emergency Call"
             >
-              <Ambulance className="h-4 w-4 text-red-600" />
-              <span className="hidden sm:inline">Emergency SOS (911)</span>
-              <span className="sm:hidden">SOS</span>
+              <Video className="h-4 w-4 text-white" />
+              <span className="hidden sm:inline">{t.emergencyBtn}</span>
+              <span className="sm:hidden">{t.emergencyShort}</span>
+            </button>
+
+            {/* Hindi / English Language Toggle */}
+            <button
+              type="button"
+              onClick={toggleLanguage}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-sky-200 dark:border-slate-700 bg-sky-50/70 dark:bg-slate-800 text-sky-800 dark:text-sky-300 hover:bg-sky-100 text-xs font-bold transition"
+              title="Switch Language (English / हिंदी)"
+            >
+              <Languages className="h-3.5 w-3.5" />
+              <span>{language === "en" ? "EN | हिंदी" : "हिंदी | EN"}</span>
+            </button>
+
+            {/* Light / Dark Mode Toggle */}
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className="h-9 w-9 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-amber-300 hover:bg-slate-100 flex items-center justify-center transition"
+              title={theme === "dark" ? t.lightMode : t.darkMode}
+            >
+              {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </button>
 
             {/* Notifications Bell */}
@@ -188,7 +254,7 @@ export default function PatientLayout() {
             {/* Profile Avatar */}
             <Link
               to="/patient/profile"
-              className="h-8 w-8 rounded-xl bg-sky-100 text-sky-700 flex items-center justify-center text-xs font-bold border border-sky-200 hover:ring-2 hover:ring-sky-300 transition-all"
+              className="h-8 w-8 rounded-xl bg-sky-100 dark:bg-sky-900 text-sky-700 dark:text-sky-200 flex items-center justify-center text-xs font-bold border border-sky-200 dark:border-sky-700 hover:ring-2 hover:ring-sky-300 transition-all"
             >
               {user ? getInitials(user.firstName, user.lastName) : "PT"}
             </Link>
@@ -202,11 +268,11 @@ export default function PatientLayout() {
             onClick={() => setMobileMenuOpen(false)}
           >
             <div
-              className="w-64 h-full bg-white p-4 flex flex-col"
+              className="w-64 h-full bg-white dark:bg-slate-900 p-4 flex flex-col"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex items-center justify-between pb-4 border-b border-slate-100">
-                <span className="font-bold text-lg text-slate-900">
+              <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
+                <span className="font-bold text-lg text-slate-900 dark:text-white">
                   DocAI Health
                 </span>
                 <button
@@ -226,7 +292,7 @@ export default function PatientLayout() {
                       `flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-semibold ${
                         isActive
                           ? "bg-sky-500 text-white"
-                          : "text-slate-600 hover:bg-slate-100"
+                          : "text-slate-600 dark:text-slate-300 hover:bg-slate-100"
                       }`
                     }
                   >
@@ -240,73 +306,18 @@ export default function PatientLayout() {
         )}
 
         {/* Main View Area */}
-        <main className="flex-1 overflow-y-auto bg-gradient-to-b from-[#F0F7FF] via-[#F8FAFC] to-[#F1F8F6] p-6 lg:p-8">
+        <main className="flex-1 overflow-y-auto bg-gradient-to-b from-[#F0F7FF] via-[#F8FAFC] to-[#F1F8F6] dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 p-6 lg:p-8">
           <Outlet />
         </main>
       </div>
 
-      {/* ── Emergency SOS Hotline Modal ── */}
-      {showEmergencyModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="max-w-md w-full rounded-3xl bg-white p-6 shadow-2xl border-2 border-red-200 space-y-4 animate-in zoom-in-95">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-red-600 font-extrabold text-lg">
-                <ShieldAlert className="h-6 w-6" />
-                <span>Immediate Emergency Help</span>
-              </div>
-              <button
-                onClick={() => setShowEmergencyModal(false)}
-                className="h-8 w-8 rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200 flex items-center justify-center"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            <p className="text-xs text-slate-600 leading-relaxed">
-              If you or someone around you is experiencing life-threatening
-              symptoms (chest pain, shortness of breath, severe bleeding, or
-              loss of consciousness), please dial emergency services
-              immediately.
-            </p>
-
-            <div className="space-y-2.5 pt-1">
-              <a
-                href="tel:911"
-                className="flex items-center justify-between p-3.5 rounded-2xl bg-red-600 text-white font-bold text-sm hover:bg-red-700 shadow-md shadow-red-200 transition-all"
-              >
-                <span className="flex items-center gap-2">
-                  <PhoneCall className="h-4 w-4" /> Dial 911 / 112 (Emergency
-                  Services)
-                </span>
-                <ArrowRight className="h-4 w-4" />
-              </a>
-
-              <a
-                href="tel:18002221222"
-                className="flex items-center justify-between p-3 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 font-semibold text-xs hover:bg-amber-100 transition-all"
-              >
-                <span>Poison Control Hotline (1-800-222-1222)</span>
-                <PhoneCall className="h-3.5 w-3.5 text-amber-700" />
-              </a>
-
-              <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-600">
-                <strong>Emergency Tip:</strong> Keep calm, sit or lie down
-                comfortably, and do not attempt to drive yourself if feeling
-                faint or breathless.
-              </div>
-            </div>
-
-            <Button
-              variant="outline"
-              size="sm"
-              className="w-full text-xs rounded-xl"
-              onClick={() => setShowEmergencyModal(false)}
-            >
-              Close Alert
-            </Button>
-          </div>
-        </div>
-      )}
+      {/* ── Live WebRTC Emergency Video Modal ── */}
+      <EmergencyVideoModal
+        isOpen={showEmergencyModal}
+        onClose={() => setShowEmergencyModal(false)}
+        role="PATIENT"
+        initialCall={activeEmergencyCall}
+      />
     </div>
   );
 }

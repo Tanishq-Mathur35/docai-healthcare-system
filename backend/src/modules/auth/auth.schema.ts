@@ -37,7 +37,19 @@ export const resetPasswordSchema = z.object({
   password: z.string().min(8).max(128),
 });
 
+export const verifyOtpSchema = z.object({
+  email: z.string().email('Invalid email address'),
+  otp: z.string().trim().length(6, 'OTP must be a 6-digit code'),
+});
+
+export const resendOtpSchema = z.object({
+  email: z.string().email('Invalid email address'),
+});
+
 export type RegisterDto = z.infer<typeof registerSchema>;
 export type LoginDto = z.infer<typeof loginSchema>;
 export type ForgotPasswordDto = z.infer<typeof forgotPasswordSchema>;
 export type ResetPasswordDto = z.infer<typeof resetPasswordSchema>;
+export type VerifyOtpDto = z.infer<typeof verifyOtpSchema>;
+export type ResendOtpDto = z.infer<typeof resendOtpSchema>;
+
